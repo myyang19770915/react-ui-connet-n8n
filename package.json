@@ -1,0 +1,25 @@
+{
+  "name": "n8n-workflow-ui",
+  "version": "1.0.0",
+  "description": "AI Agent Chat Interface with React",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "dev:8080": "vite --port 9001",
+    "dev:5000": "vite --port 5000",
+    "build": "vite build",
+    "preview": "vite preview",
+    "preview:8080": "vite preview --port 9001",
+    "preview:5000": "vite preview --port 5000"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.43",
+    "@types/react-dom": "^18.2.17",
+    "@vitejs/plugin-react": "^4.2.1",
+    "vite": "^5.0.8"
+  }
+}
