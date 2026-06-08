@@ -4,26 +4,85 @@ import './App.css';
 const WEBHOOK_URL = 'https://n8n.txcaix.com/webhook/4ae2fdef-878f-4854-8f94-944affb06581';
 const TIMEOUT_MS = 300000; // Timeout 設定：120秒（2分鐘），可根據需求調整
 
+const MultiSelect = ({ options, selected, onChange, placeholder = "請選擇" }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (containerRef.current && !containerRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, []);
+
+  const toggleOption = (option) => {
+    const newSelected = selected.includes(option)
+      ? selected.filter(item => item !== option)
+      : [...selected, option];
+    onChange(newSelected);
+  };
+
+  const displayText = selected.length > 0
+    ? selected.join(', ')
+    : placeholder;
+
+  return (
+    <div className="multi-select-container" ref={containerRef}>
+      <div
+        className={`multi-select-trigger ${isOpen ? 'open' : ''}`}
+        onClick={() => setIsOpen(!isOpen)}
+        title={selected.join(', ')}
+      >
+        <span className="trigger-text">{displayText}</span>
+        <span className="arrow">▼</span>
+      </div>
+      {isOpen && (
+        <div className="multi-select-dropdown">
+          {options.map(option => (
+            <div
+              key={option}
+              className={`multi-select-option ${selected.includes(option) ? 'selected' : ''}`}
+              onClick={() => toggleOption(option)}
+            >
+              <input
+                type="checkbox"
+                checked={selected.includes(option)}
+                readOnly
+              />
+              <span>{option}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
 function App() {
   const [messages, setMessages] = useState([
     { content: '您好！我是 AI 助手，有什麼可以幫助您的嗎？', isUser: false }
   ]);
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
+  const today = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD
+  const [startDate, setStartDate] = useState(today);
+  const [endDate, setEndDate] = useState(today);
   const [dateInfo, setDateInfo] = useState('');
   const [theme, setTheme] = useState('3d-cartoon'); // 預設風格
   const [showThemeMenu, setShowThemeMenu] = useState(false);
-  const [selectedFloor, setSelectedFloor] = useState(''); // 樓層篩選
+  const [selectedFloors, setSelectedFloors] = useState([]); // 樓層篩選 (多選)
   const [selectedShift, setSelectedShift] = useState(''); // 班別篩選
   const [selectedFunction, setSelectedFunction] = useState(''); // 功能選擇
+  const [lineId, setLineId] = useState(''); // 線別篩選 (例如 #5, #6)
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
 
   const floors = ['A-2F', 'A-3F', 'A-4F', 'B-1F', 'B-2F', 'B-3F', 'C-2F', 'C-3F'];
   const shifts = ['日班', '夜班'];
-  const functions = ['生產資訊', '量測資訊'];
+  const functions = ['生產資訊', '量測資訊','SOP', 'WIP', '出貨追料', '產出量'];
 
   const themes = [
     { id: '3d-cartoon', name: '3D卡通風格', icon: '🎨' },
@@ -67,7 +126,7 @@ function App() {
 
   const getDateContext = () => {
     if (!startDate && !endDate) return '';
-    
+
     let context = '\n\n[日期條件：';
     if (startDate && endDate) {
       context += `時間範圍從 ${formatDateDisplay(startDate)} 到 ${formatDateDisplay(endDate)}`;
@@ -109,15 +168,16 @@ function App() {
   };
 
   const clearFilters = () => {
-    setSelectedFloor('');
+    setSelectedFloors([]);
     setSelectedShift('');
     setSelectedFunction('');
+    setLineId('');
   };
 
   const getFilterContext = () => {
     let context = '';
-    if (selectedFloor) {
-      context += `\n[樓層：${selectedFloor}]`;
+    if (selectedFloors.length > 0) {
+      context += `\n[樓層：${selectedFloors.join(', ')}]`;
     }
     if (selectedShift) {
       context += `\n[班別：${selectedShift}]`;
@@ -125,46 +185,109 @@ function App() {
     if (selectedFunction) {
       context += `\n[查詢類型：${selectedFunction}]`;
     }
+    if (lineId) {
+      context += `\n[線別：${lineId}]`;
+    }
     return context;
   };
 
+  // 門檻值設定
+  const ACHIEVEMENT_THRESHOLD = 0.7;
+  const UTILIZATION_RATE_THRESHOLD = 70;
+
   const renderTable = (rows) => {
     if (rows.length === 0) return '';
-    
+
     const parseRow = (row) => {
       return row
         .split('|')
         .slice(1, -1)
         .map(cell => cell.trim());
     };
-    
+
     const headerCells = parseRow(rows[0]);
     const bodyRows = rows.slice(1);
-    
+
+    // 找出各欄位的索引位置
+    const achievementIndex = headerCells.findIndex(
+      header => header.toLowerCase().replace(/\\_/g, '_') === 'achievement'
+    );
+    // 支援舊格式 utilization_rate 與新格式 稼動率(%)
+    const utilizationRateIndex = headerCells.findIndex(
+      header => {
+        const normalized = header.replace(/\\_/g, '_').trim();
+        return normalized.toLowerCase() === 'utilization_rate' ||
+          normalized === '稼動率(%)' ||
+          normalized === '稼動率';
+      }
+    );
+    // 支援舊格式 explanation 與新格式 機台狀態
+    const machineStatusIndex = headerCells.findIndex(
+      header => {
+        const normalized = header.replace(/\\_/g, '_').trim();
+        return normalized.toLowerCase() === 'explanation' ||
+          normalized === '機台狀態';
+      }
+    );
+
     let html = '<div class="md-table-wrapper"><table class="md-table">';
     html += '<thead><tr>';
     headerCells.forEach(cell => {
       html += `<th>${cell}</th>`;
     });
     html += '</tr></thead>';
-    
+
     if (bodyRows.length > 0) {
       html += '<tbody>';
       bodyRows.forEach(row => {
         const cells = parseRow(row);
         html += '<tr>';
-        cells.forEach(cell => {
+
+        // 取得該行的機台狀態值（用於判斷稼動率是否標紅）
+        let machineStatusValue = '';
+        if (machineStatusIndex !== -1 && cells[machineStatusIndex]) {
+          machineStatusValue = cells[machineStatusIndex]
+            .replace(/\\_/g, '_')
+            .replace(/\\-/g, '-')
+            .trim();
+        }
+
+        cells.forEach((cell, cellIndex) => {
           // 處理表格內的特殊字元
           let cellContent = cell
             .replace(/\\_/g, '_')
             .replace(/\\-/g, '-');
-          html += `<td>${cellContent}</td>`;
+
+          let shouldHighlight = false;
+
+          // 檢查 achievement 欄位是否低於門檻值
+          if (cellIndex === achievementIndex && achievementIndex !== -1) {
+            const numValue = parseFloat(cellContent);
+            if (!isNaN(numValue) && numValue < ACHIEVEMENT_THRESHOLD) {
+              shouldHighlight = true;
+            }
+          }
+
+          // 檢查稼動率欄位（僅在機台狀態為 RUN(NO ERROR) 時）
+          if (cellIndex === utilizationRateIndex && utilizationRateIndex !== -1) {
+            const numValue = parseFloat(cellContent);
+            // 只有當機台狀態是 "RUN(NO ERROR)" 且數值低於門檻值時才標紅
+            if (!isNaN(numValue) && numValue < UTILIZATION_RATE_THRESHOLD && machineStatusValue === 'RUN(NO ERROR)') {
+              shouldHighlight = true;
+            }
+          }
+
+          if (shouldHighlight) {
+            html += `<td class="achievement-below-threshold">${cellContent}</td>`;
+          } else {
+            html += `<td>${cellContent}</td>`;
+          }
         });
         html += '</tr>';
       });
       html += '</tbody>';
     }
-    
+
     html += '</table></div>';
     return html;
   };
@@ -175,12 +298,12 @@ function App() {
     let inTable = false;
     let tableRows = [];
     let result = [];
-    
+
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
       const isTableRow = /^\|(.+)\|$/.test(line.trim());
       const isSeparator = /^\|[-:\|\s]+\|$/.test(line.trim());
-      
+
       if (isTableRow || isSeparator) {
         if (!inTable) {
           inTable = true;
@@ -198,20 +321,20 @@ function App() {
         result.push(line);
       }
     }
-    
+
     if (inTable && tableRows.length > 0) {
       result.push(renderTable(tableRows));
     }
-    
+
     let formatted = result.join('\n');
-    
+
     // 保護已生成的表格 HTML
     const tableMatches = [];
     formatted = formatted.replace(/<div class="md-table-wrapper">[\s\S]*?<\/div>/g, (match) => {
       tableMatches.push(match);
       return `__TABLE_PLACEHOLDER_${tableMatches.length - 1}__`;
     });
-    
+
     // HTML 轉義
     formatted = formatted
       .replace(/&/g, '&amp;')
@@ -219,47 +342,47 @@ function App() {
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#039;');
-    
+
     // 還原表格
     tableMatches.forEach((table, index) => {
       formatted = formatted.replace(`__TABLE_PLACEHOLDER_${index}__`, table);
     });
-    
+
     // 處理水平分隔線
     formatted = formatted.replace(/^---+$/gm, '<hr class="md-hr">');
-    
+
     // Convert markdown headers (#### > ### > ## > #)
     formatted = formatted.replace(/^#### (.+)$/gm, '<div class="md-header md-h4">$1</div>');
     formatted = formatted.replace(/^### (.+)$/gm, '<div class="md-header md-h3">$1</div>');
     formatted = formatted.replace(/^## (.+)$/gm, '<div class="md-header md-h2">$1</div>');
     formatted = formatted.replace(/^# (.+)$/gm, '<div class="md-header md-h1">$1</div>');
-    
+
     // Convert numbered lists
     formatted = formatted.replace(/^(\d+)\. (.+)$/gm, '<div class="md-list-item md-numbered"><span class="md-list-number">$1.</span> $2</div>');
-    
+
     // Convert bullet list items (• 或 * 或 -)
     formatted = formatted.replace(/^[•\*\-] (.+)$/gm, '<div class="md-list-item"><span class="md-bullet">•</span> $1</div>');
-    
+
     // Convert bold
     formatted = formatted.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-    
+
     // Convert italic (單個 * 包圍)
     formatted = formatted.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
-    
+
     // Convert inline code
     formatted = formatted.replace(/`([^`]+)`/g, '<code class="md-inline-code">$1</code>');
-    
+
     // Convert markdown links
     formatted = formatted.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="md-link">$1</a>');
-    
+
     // Convert plain URLs
     formatted = formatted.replace(/(?<!href="|">)(https?:\/\/[^\s<"]+)(?!")/g, '<a href="$1" target="_blank" rel="noopener noreferrer" class="md-link">$1</a>');
-    
+
     // Convert line breaks - 減少連續空行
     formatted = formatted.replace(/\n{3,}/g, '\n\n'); // 將3個以上換行縮減為2個
     formatted = formatted.replace(/\n\n/g, '<br>'); // 雙換行變單個br
     formatted = formatted.replace(/\n/g, '<br>'); // 單換行變br
-    
+
     return formatted;
   };
 
@@ -286,14 +409,14 @@ function App() {
 
       const text = await response.text();
       console.log('Response text:', text);
-      
+
       let data;
       try {
         data = JSON.parse(text);
       } catch (e) {
         return text || '收到空回應';
       }
-      
+
       if (data.output) {
         return data.output;
       } else if (data.response) {
@@ -310,29 +433,29 @@ function App() {
       }
     } catch (error) {
       console.error('Error sending message:', error);
-      
+
       // 處理 timeout 錯誤
       if (error.name === 'AbortError') {
         throw new Error('請求超時：伺服器響應時間過長，請稍後再試或聯繫管理員');
       }
-      
+
       throw error;
     }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     const message = inputMessage.trim();
     const dateContext = getDateContext();
     const filterContext = getFilterContext();
-    
+
     // 檢查是否有輸入訊息或有選擇任何篩選條件
-    const hasFilters = startDate || endDate || selectedFloor || selectedShift || selectedFunction;
+    const hasFilters = startDate || endDate || selectedFloors.length > 0 || selectedShift || selectedFunction || lineId;
     if (!message && !hasFilters) return;
 
     setIsLoading(true);
-    
+
     // 如果沒有輸入訊息但有篩選條件，使用預設查詢訊息
     const displayMessage = message || '請依據篩選條件查詢';
     const fullMessage = (message || '查詢') + dateContext + filterContext;
@@ -345,10 +468,10 @@ function App() {
       const response = await sendMessage(fullMessage);
       setMessages(prev => [...prev, { content: response, isUser: false }]);
     } catch (error) {
-      setMessages(prev => [...prev, { 
-        content: '抱歉，發送訊息時發生錯誤，請稍後再試。', 
+      setMessages(prev => [...prev, {
+        content: '抱歉，發送訊息時發生錯誤，請稍後再試。',
         isUser: false,
-        isError: true 
+        isError: true
       }]);
     } finally {
       setIsLoading(false);
@@ -360,9 +483,9 @@ function App() {
     <div className={`app theme-${theme}`}>
       <div className="chat-container">
         <div className="chat-header">
-          🤖 SMD Agent 領班助理系統
+          🤖 SMD 智能領班系統
           <div className="theme-selector">
-            <button 
+            <button
               className="theme-toggle-btn"
               onClick={() => setShowThemeMenu(!showThemeMenu)}
               title="切換風格"
@@ -388,19 +511,19 @@ function App() {
             )}
           </div>
         </div>
-        
+
         <div className="chat-messages">
           {messages.map((msg, index) => (
             <div key={index} className={`message ${msg.isUser ? 'user' : 'assistant'}`}>
-              <div 
+              <div
                 className="message-content"
-                dangerouslySetInnerHTML={{ 
+                dangerouslySetInnerHTML={{
                   __html: msg.isUser ? msg.content.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') : formatMessage(msg.content)
                 }}
               />
             </div>
           ))}
-          
+
           {isLoading && (
             <div className="message assistant">
               <div className="typing-indicator">
@@ -412,24 +535,24 @@ function App() {
               </div>
             </div>
           )}
-          
+
           <div ref={messagesEndRef} />
         </div>
 
         <div className="filter-bar">
           <div className="filter-group">
             <span className="filter-label">📅 日期：</span>
-            <input 
-              type="date" 
-              className="date-input" 
+            <input
+              type="date"
+              className="date-input"
               value={startDate}
               onChange={handleStartDateChange}
               title="選擇開始日期"
             />
             <span className="date-range-separator">~</span>
-            <input 
-              type="date" 
-              className="date-input" 
+            <input
+              type="date"
+              className="date-input"
               value={endDate}
               onChange={handleEndDateChange}
               title="選擇結束日期"
@@ -438,21 +561,17 @@ function App() {
 
           <div className="filter-group">
             <span className="filter-label">🏢 樓層：</span>
-            <select 
-              className="filter-select"
-              value={selectedFloor}
-              onChange={(e) => setSelectedFloor(e.target.value)}
-            >
-              <option value="">不限</option>
-              {floors.map(floor => (
-                <option key={floor} value={floor}>{floor}</option>
-              ))}
-            </select>
+            <MultiSelect
+              options={floors}
+              selected={selectedFloors}
+              onChange={setSelectedFloors}
+              placeholder="請選擇樓層"
+            />
           </div>
 
           <div className="filter-group">
             <span className="filter-label">⏰ 班別：</span>
-            <select 
+            <select
               className="filter-select"
               value={selectedShift}
               onChange={(e) => setSelectedShift(e.target.value)}
@@ -466,16 +585,28 @@ function App() {
 
           <div className="filter-group">
             <span className="filter-label">📊 功能：</span>
-            <select 
+            <select
               className="filter-select"
               value={selectedFunction}
               onChange={(e) => setSelectedFunction(e.target.value)}
             >
-              <option value="">不限</option>
+              <option value="">請擇一</option>
               {functions.map(func => (
                 <option key={func} value={func}>{func}</option>
               ))}
             </select>
+          </div>
+
+          <div className="filter-group">
+            <span className="filter-label">🔢 線別：</span>
+            <input
+              type="text"
+              className="line-id-input"
+              value={lineId}
+              onChange={(e) => setLineId(e.target.value)}
+              placeholder="例如 #5, #6"
+              title="輸入線別編號"
+            />
           </div>
 
           <button type="button" className="clear-all-btn" onClick={() => { clearDates(); clearFilters(); }}>
@@ -485,13 +616,13 @@ function App() {
 
         <div className="chat-input-container">
           <form className="chat-input-form" onSubmit={handleSubmit}>
-            <input 
+            <input
               ref={inputRef}
-              type="text" 
-              className="chat-input" 
+              type="text"
+              className="chat-input"
               value={inputMessage}
               onChange={(e) => setInputMessage(e.target.value)}
-              placeholder={startDate || endDate || selectedFloor || selectedShift || selectedFunction ? "可直接發送查詢，或輸入更多訊息..." : "輸入您的訊息..."}
+              placeholder={startDate || endDate || selectedFloors.length > 0 || selectedShift || selectedFunction || lineId ? "可直接發送查詢，或輸入更多訊息..." : "輸入您的訊息..."}
               autoComplete="off"
               data-form-type="other"
               data-lpignore="true"

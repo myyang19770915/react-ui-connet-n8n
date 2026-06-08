@@ -378,6 +378,7 @@ body {
     opacity: 0;
     transform: translateY(-10px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -475,6 +476,7 @@ body {
     opacity: 0;
     transform: translateY(10px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -573,9 +575,13 @@ body {
 }
 
 @keyframes bounce {
-  0%, 60%, 100% {
+
+  0%,
+  60%,
+  100% {
     transform: translateY(0);
   }
+
   30% {
     transform: translateY(-10px);
   }
@@ -635,7 +641,9 @@ body {
   font-weight: 500;
 }
 
-.filter-select {
+.filter-select,
+.multi-select-trigger,
+.line-id-input {
   padding: 4px 8px;
   border: 1px solid #ddd;
   border-radius: 5px;
@@ -649,11 +657,25 @@ body {
   min-width: 65px;
 }
 
-.filter-select:hover {
+.line-id-input {
+  width: 90px;
+  cursor: text;
+}
+
+.line-id-input::placeholder {
+  color: #999;
+  font-style: italic;
+}
+
+.filter-select:hover,
+.multi-select-trigger:hover,
+.line-id-input:hover {
   border-color: #667eea;
 }
 
-.filter-select:focus {
+.filter-select:focus,
+.multi-select-trigger.open,
+.line-id-input:focus {
   border-color: #667eea;
   box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
 }
@@ -676,6 +698,124 @@ body {
   box-shadow: 0 2px 8px rgba(102, 126, 234, 0.4);
 }
 
+/* MultiSelect Specific Styles */
+.multi-select-container {
+  position: relative;
+  display: inline-block;
+}
+
+.multi-select-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  /* Override min-width if needed */
+  min-width: 120px;
+}
+
+.multi-select-trigger .arrow {
+  font-size: 10px;
+  opacity: 0.6;
+}
+
+.multi-select-dropdown {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  z-index: 1000;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 5px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  max-height: 250px;
+  overflow-y: auto;
+  min-width: 100%;
+  margin-bottom: 4px;
+}
+
+.multi-select-option {
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 12px;
+  color: #333;
+  transition: background 0.2s;
+  white-space: nowrap;
+}
+
+.multi-select-option:hover {
+  background-color: #f5f5f5;
+}
+
+.multi-select-option.selected {
+  background-color: rgba(102, 126, 234, 0.1);
+  color: #667eea;
+  font-weight: 600;
+}
+
+.multi-select-option input[type="checkbox"] {
+  accent-color: #667eea;
+}
+
+/* Theme support for dropdown */
+.theme-tech-neon .multi-select-dropdown {
+  background: rgba(20, 20, 40, 0.95);
+  border: 1px solid rgba(0, 255, 255, 0.3);
+  box-shadow: 0 0 15px rgba(0, 255, 255, 0.2);
+}
+
+.theme-tech-neon .multi-select-option {
+  color: #00ffff;
+}
+
+.theme-tech-neon .multi-select-option:hover {
+  background: rgba(0, 255, 255, 0.1);
+}
+
+.theme-tech-neon .multi-select-option.selected {
+  background: rgba(0, 255, 255, 0.2);
+  color: #fff;
+}
+
+.theme-tech-neon .multi-select-option input[type="checkbox"] {
+  accent-color: #00ffff;
+}
+
+.theme-dark-cool .multi-select-dropdown {
+  background: #2d2d44;
+  border: 1px solid #3d3d5c;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+.theme-dark-cool .multi-select-option {
+  color: #e0e0e0;
+}
+
+.theme-dark-cool .multi-select-option:hover {
+  background: #3d3d5c;
+}
+
+.theme-dark-cool .multi-select-option.selected {
+  background: rgba(233, 69, 96, 0.2);
+  color: #e94560;
+}
+
+.theme-dark-cool .multi-select-option input[type="checkbox"] {
+  accent-color: #e94560;
+}
+
+/* Apple minimal adjustments */
+.theme-apple-minimal .multi-select-option.selected {
+  background: #f0f0f0;
+  color: #007aff;
+}
+
+.theme-apple-minimal .multi-select-option input[type="checkbox"] {
+  accent-color: #007aff;
+}
+
 /* 各主題的篩選列樣式 */
 .theme-tech-neon .filter-bar {
   background: rgba(20, 20, 40, 0.9);
@@ -687,16 +827,26 @@ body {
 }
 
 .theme-tech-neon .date-input,
-.theme-tech-neon .filter-select {
+.theme-tech-neon .filter-select,
+.theme-tech-neon .multi-select-trigger,
+.theme-tech-neon .line-id-input {
   background: rgba(30, 30, 60, 0.9);
   border-color: rgba(0, 255, 255, 0.3);
   color: #00ffff;
 }
 
+.theme-tech-neon .line-id-input::placeholder {
+  color: rgba(0, 255, 255, 0.5);
+}
+
 .theme-tech-neon .date-input:hover,
 .theme-tech-neon .date-input:focus,
 .theme-tech-neon .filter-select:hover,
-.theme-tech-neon .filter-select:focus {
+.theme-tech-neon .filter-select:focus,
+.theme-tech-neon .multi-select-trigger:hover,
+.theme-tech-neon .multi-select-trigger.open,
+.theme-tech-neon .line-id-input:hover,
+.theme-tech-neon .line-id-input:focus {
   border-color: #00ffff;
 }
 
@@ -715,7 +865,9 @@ body {
 }
 
 .theme-apple-minimal .date-input:focus,
-.theme-apple-minimal .filter-select:focus {
+.theme-apple-minimal .filter-select:focus,
+.theme-apple-minimal .multi-select-trigger.open,
+.theme-apple-minimal .line-id-input:focus {
   border-color: #007aff;
   box-shadow: 0 0 0 2px rgba(0, 122, 255, 0.1);
 }
@@ -734,16 +886,26 @@ body {
 }
 
 .theme-dark-cool .date-input,
-.theme-dark-cool .filter-select {
+.theme-dark-cool .filter-select,
+.theme-dark-cool .multi-select-trigger,
+.theme-dark-cool .line-id-input {
   background: #2d2d44;
   border-color: #3d3d5c;
   color: #e0e0e0;
 }
 
+.theme-dark-cool .line-id-input::placeholder {
+  color: #888;
+}
+
 .theme-dark-cool .date-input:hover,
 .theme-dark-cool .date-input:focus,
 .theme-dark-cool .filter-select:hover,
-.theme-dark-cool .filter-select:focus {
+.theme-dark-cool .filter-select:focus,
+.theme-dark-cool .multi-select-trigger:hover,
+.theme-dark-cool .multi-select-trigger.open,
+.theme-dark-cool .line-id-input:hover,
+.theme-dark-cool .line-id-input:focus {
   border-color: #e94560;
 }
 
@@ -963,6 +1125,13 @@ body {
   background: rgba(102, 126, 234, 0.08);
 }
 
+/* achievement 低於門檻值的警示樣式 */
+.achievement-below-threshold {
+  color: #dc3545 !important;
+  font-weight: 700;
+  background-color: rgba(220, 53, 69, 0.1) !important;
+}
+
 /* ========== 各主題的 Markdown 樣式覆蓋 ========== */
 
 /* 科技冷光風格 */
@@ -1017,6 +1186,12 @@ body {
   background: rgba(0, 255, 255, 0.05);
 }
 
+.theme-tech-neon .achievement-below-threshold {
+  color: #ff4d6d !important;
+  text-shadow: 0 0 5px rgba(255, 77, 109, 0.5);
+  background-color: rgba(255, 77, 109, 0.15) !important;
+}
+
 /* 蘋果簡約風格 */
 .theme-apple-minimal .md-header {
   color: #1d1d1f;
@@ -1046,6 +1221,11 @@ body {
 
 .theme-apple-minimal .md-table-wrapper {
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+}
+
+.theme-apple-minimal .achievement-below-threshold {
+  color: #ff3b30 !important;
+  background-color: rgba(255, 59, 48, 0.1) !important;
 }
 
 /* 黑暗冷酷風格 */
@@ -1097,3 +1277,7 @@ body {
   background: rgba(255, 255, 255, 0.02);
 }
 
+.theme-dark-cool .achievement-below-threshold {
+  color: #ff6b6b !important;
+  background-color: rgba(255, 107, 107, 0.2) !important;
+}
